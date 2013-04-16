@@ -13,4 +13,6 @@ public interface IEntityService {
 
 	Collection<Article> loadArticlesWithoutContent();
 
+	Collection<Article> loadArticlesNotSpinned();
+
 }

@@ -13,4 +13,5 @@ public interface IEntityDao {
 
 	Collection<Article> loadArticlesWithoutContent();
 
+	Collection<Article> loadArticlesNotSpinned();
 }

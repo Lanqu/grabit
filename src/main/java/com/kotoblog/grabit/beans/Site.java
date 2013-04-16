@@ -10,11 +10,14 @@ import javax.persistence.FetchType;
 import javax.persistence.Id;
 import javax.persistence.OneToMany;
 import javax.validation.constraints.NotNull;
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlAccessorType;
 
 import org.springframework.stereotype.Component;
 
 @Entity
 @Component
+@XmlAccessorType(XmlAccessType.FIELD)
 public class Site implements Serializable {
 
 	private static final long serialVersionUID = 7923961601994313645L;

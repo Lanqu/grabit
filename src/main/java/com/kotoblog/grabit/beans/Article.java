@@ -14,6 +14,7 @@ import javax.persistence.Id;
 import javax.persistence.Lob;
 import javax.persistence.ManyToMany;
 import javax.persistence.ManyToOne;
+import javax.persistence.OneToMany;
 import javax.validation.constraints.NotNull;
 
 import org.springframework.stereotype.Component;
@@ -40,6 +41,9 @@ public class Article implements Serializable  {
 
 	@Lob
 	String content;
+
+	@OneToMany(cascade = CascadeType.ALL, fetch = FetchType.EAGER, mappedBy = "originalId", targetEntity = SpinnedArticle.class)
+	Set<SpinnedArticle> spinnedArticles;
 
 	@ManyToMany(targetEntity = Keyword.class, cascade = { CascadeType.ALL }, fetch = FetchType.EAGER)
 	Set<Keyword> keywords;
@@ -149,6 +153,22 @@ public class Article implements Serializable  {
 
 	public void setArticlesDirectory(ArticlesDirectory articlesDirectory) {
 		this.articlesDirectory = articlesDirectory;
+	}
+
+	public Set<SpinnedArticle> getSpinnedArticles() {
+		if (this.spinnedArticles == null) {
+			this.spinnedArticles = new HashSet<SpinnedArticle>();
+		}
+		return this.spinnedArticles;
+	}
+
+	public void setSpinnedArticles(Set<SpinnedArticle> spinnedArticles) {
+		this.spinnedArticles = spinnedArticles;
+	}
+
+	public void addSpinnedArticle(SpinnedArticle spinnedArticle) {
+		getSpinnedArticles().add(spinnedArticle);
+		spinnedArticle.setOriginalId(this.getId());
 	}
 
 }

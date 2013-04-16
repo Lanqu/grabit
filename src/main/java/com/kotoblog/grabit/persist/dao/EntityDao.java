@@ -39,7 +39,15 @@ public class EntityDao implements IEntityDao {
 	@Override
 	public Collection<Article> loadArticlesWithoutContent() {
 		@SuppressWarnings("unchecked")
-		List<Article> q = this.sessionFactory.getCurrentSession().createQuery("from Article article where article.content is null").list();
+		List<Article> q = this.sessionFactory.getCurrentSession()
+		.createQuery("from Article article where (article.content is null) or (length(article.content) < 5)").list();
+		return q;
+	}
+
+	@Override
+	public Collection<Article> loadArticlesNotSpinned() {
+		@SuppressWarnings("unchecked")
+		List<Article> q = this.sessionFactory.getCurrentSession().createQuery("from Article article where article.spinnedArticles is empty").list();
 		return q;
 	}
 

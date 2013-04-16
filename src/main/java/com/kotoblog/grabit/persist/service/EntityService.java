@@ -39,4 +39,10 @@ public class EntityService implements IEntityService {
 		return this.dao.loadArticlesWithoutContent();
 	}
 
+	@Override
+	@Transactional
+	public Collection<Article> loadArticlesNotSpinned() {
+		return this.dao.loadArticlesNotSpinned();
+	}
+
 }

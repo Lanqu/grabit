@@ -27,11 +27,15 @@ import com.kotoblog.grabit.beans.ArticlesDirectory;
 import com.kotoblog.grabit.beans.Config;
 import com.kotoblog.grabit.beans.Keyword;
 import com.kotoblog.grabit.beans.Site;
+import com.kotoblog.grabit.beans.SpinnedArticle;
 import com.kotoblog.grabit.captcha.ManualCaptchaSolver;
 import com.kotoblog.grabit.client.GrabitClient;
 import com.kotoblog.grabit.exceptions.CaptchaGrabitException;
 import com.kotoblog.grabit.exceptions.GrabitException;
+import com.kotoblog.grabit.exceptions.SpinnerGrabitException;
 import com.kotoblog.grabit.persist.service.IEntityService;
+import com.kotoblog.grabit.spinner.AbstractSpinner;
+import com.kotoblog.grabit.spinner.FreeArticlesSpinner;
 
 /**
  * Hello world!
@@ -41,7 +45,6 @@ public class GrabIt {
 
 	private static IEntityService persister;
 
-	@SuppressWarnings("unchecked")
 	public static void main(String[] args) throws FailingHttpStatusCodeException, MalformedURLException, IOException, InterruptedException, GrabitException,
 	ClassNotFoundException, SQLException {
 		System.getProperties().put("org.apache.commons.logging.simplelog.defaultlog", "trace");
@@ -49,101 +52,206 @@ public class GrabIt {
 		ClassPathXmlApplicationContext applicationContext = null;
 		try {
 
-			// Initialisation block
-			applicationContext = new ClassPathXmlApplicationContext("applicationContext.xml");
-			persister = applicationContext.getBean(IEntityService.class);
+			applicationContext = initPersister();
 
-			GrabitClient browser = new GrabitClient(BrowserVersion.INTERNET_EXPLORER_7);
-			browser.getOptions().setThrowExceptionOnFailingStatusCode(false);
+			GrabitClient browser = getBrowser();
 
-			for (Site site : getConfig("http://kotoblog.com").getSites()) {
-
-				if (site.getCount() <= site.getCollected()) {
-					continue;
-				}
-
-				for (ArticlesDirectory dir : site.getArticlesDirectories()) {
-
-					for (Keyword keyword : site.getKeywords()) {
-
-						HtmlPage page = browser.getPage(mutateUrl(dir.getMutators(), dir.getDirectoryUrl(), keyword.getKeyword().replace(' ', '+')));
-
-						page = checkForCaptcha(page);
-
-						if (dir.getSearchXpath() != null) {
-							HtmlInput keywordField = page.getFirstByXPath(dir.getKeywordFieldXpath());
-							keywordField.type(keyword.getKeyword());
-
-							HtmlInput searchBtn = page.getFirstByXPath(dir.getSearchXpath());
-							page = searchBtn.click();
-						}
-
-						HtmlElement lister = page.getFirstByXPath(dir.getListerXpath());
-
-						if (lister == null) {
-							throw new GrabitException("Lister is not found even for the first time", page.asXml());
-						}
-
-						loop: do {
-							for (HtmlAnchor a : (List<HtmlAnchor>) page.getByXPath(dir.getLinksXpath())) {
-								URL url = new URL(dir.getDirectoryUrl());
-								URL u = new URL(url.getProtocol(), url.getHost(), -1, a.getHrefAttribute());
-
-								Article article = new Article();
-								article.setUrl(u.toString());
-								article.setArticlesDirectory(dir);
-
-								if (!keyword.getArticles().contains(article)) {
-									keyword.addArticle(article);
-									site.setCollected(site.getCollected() + 1);
-								}
-
-								// TODO count all links in all dirs
-								if (site.getCount() <= site.getCollected()) {
-									break loop;
-								}
-							}
-
-							lister.setAttribute("href", mutateUrl(dir.getMutators(), lister.getAttribute("href")));
-							page = lister.click();
-							page = checkForCaptcha(page);
-
-							lister = page.getFirstByXPath(dir.getListerXpath());
-						} while (lister != null);
-
-					}
-				}
-
-				persister.saveEntity(site);
-			}
+			processSitesFromConfig(browser);
 
 			// links collected. Lets download it
 
-			Collection<Article> articlesToDownload = persister.loadArticlesWithoutContent();
+			Collection<Article> articlesToDownload = loadArticlesWithoutContent();
 
 			if (articlesToDownload != null) {
-				for (Article article : articlesToDownload) {
-					HtmlPage page = browser.getPage(article.getUrl());
-
-					List<DomElement> content = (List<DomElement>) page.getByXPath(article.getArticlesDirectory().getContentXpath());
-
-					StringBuffer contentStr = new StringBuffer();
-
-					for (DomElement el : content) {
-						contentStr.append(el.asXml());
-					}
-
-					article.setContent(contentStr.toString());
-
-					persister.saveEntity(article);
-
-				}
+				downloadArticles(browser, articlesToDownload);
 			}
+
+			// articles downloaded. Lets spin them
+
+			Collection<Article> articlesToSpin = loadArticlesNotSpinned();
+
+			spinArticles(articlesToSpin);
+
 		} finally {
-			if (applicationContext != null) {
-				applicationContext.close();
+			closeContext(applicationContext);
+		}
+	}
+
+	private static void spinArticles(Collection<Article> articlesToDownload) throws SpinnerGrabitException {
+		AbstractSpinner spinner = new FreeArticlesSpinner("lanquu@gmail.com", "lanqumix");
+
+		for (Article article : articlesToDownload) {
+			String spinnedContent = spinner.spin(article.getContent());
+			article.addSpinnedArticle(new SpinnedArticle(spinnedContent));
+
+			persister.saveEntity(article);
+		}
+	}
+
+	private static Collection<Article> loadArticlesWithoutContent() {
+		return persister.loadArticlesWithoutContent();
+	}
+
+	private static Collection<Article> loadArticlesNotSpinned() {
+		return persister.loadArticlesNotSpinned();
+	}
+
+	private static void processSitesFromConfig(GrabitClient browser) throws IOException, MalformedURLException, InterruptedException, GrabitException {
+		for (Site site : getConfig("http://kotoblog.com").getSites()) {
+
+			if (site.getCount() <= site.getCollected()) {
+				continue;
+			}
+
+			processDirectoriesForSite(browser, site);
+
+			persister.saveEntity(site);
+		}
+	}
+
+	private static void closeContext(ClassPathXmlApplicationContext applicationContext) {
+		if (applicationContext != null) {
+			applicationContext.close();
+		}
+	}
+
+	private static void downloadArticles(GrabitClient browser, Collection<Article> articlesToDownload) throws IOException, MalformedURLException,
+	InterruptedException {
+		for (Article article : articlesToDownload) {
+			HtmlPage page = browser.getPage(article.getUrl());
+			page = checkForCaptcha(page);
+
+			String contentStr = scrapeArticleFromPage(article, page);
+			String title = page.getFirstByXPath(article.getArticlesDirectory().getTitleXpath());
+
+			article.setContent(contentStr);
+			article.setTitle(title);
+
+			persister.saveEntity(article);
+
+		}
+	}
+
+	@SuppressWarnings("unchecked")
+	private static String scrapeArticleFromPage(Article article, HtmlPage page) {
+		List<DomElement> content = (List<DomElement>) page.getByXPath(article.getArticlesDirectory().getContentXpath());
+
+		StringBuffer contentStr = new StringBuffer();
+
+		for (DomElement el : content) {
+			contentStr.append(el.asXml());
+		}
+		return contentStr.toString();
+	}
+
+	private static ClassPathXmlApplicationContext initPersister() {
+		ClassPathXmlApplicationContext applicationContext;
+		// Initialisation block
+		applicationContext = new ClassPathXmlApplicationContext("applicationContext.xml");
+		persister = applicationContext.getBean(IEntityService.class);
+		return applicationContext;
+	}
+
+	private static GrabitClient getBrowser() {
+		GrabitClient browser = new GrabitClient(BrowserVersion.INTERNET_EXPLORER_7);
+		browser.getOptions().setThrowExceptionOnFailingStatusCode(false);
+		return browser;
+	}
+
+	private static void processDirectoriesForSite(GrabitClient browser, Site site) throws IOException, MalformedURLException, InterruptedException,
+	GrabitException {
+		for (ArticlesDirectory dir : site.getArticlesDirectories()) {
+
+			for (Keyword keyword : site.getKeywords()) {
+
+				HtmlPage page = openStartPage(browser, dir, keyword);
+
+				page = checkForCaptcha(page);
+
+				page = fillSearchBoxIfNeeded(dir, keyword, page);
+
+				HtmlElement lister = extractLister(dir, page);
+
+				listThroughDirectoryTillCollected(site, dir, keyword, page, lister);
 			}
 		}
+	}
+
+	@SuppressWarnings("unchecked")
+	private static void listThroughDirectoryTillCollected(Site site, ArticlesDirectory dir, Keyword keyword, HtmlPage page, HtmlElement lister)
+			throws MalformedURLException, IOException, InterruptedException {
+		loop: do {
+			for (HtmlAnchor a : (List<HtmlAnchor>) page.getByXPath(dir.getLinksXpath())) {
+
+				URL u = makeFullUrlToArticle(dir, a);
+
+				Article article = createArticle(dir, u);
+
+				collectArticleIfNeeded(site, keyword, article);
+
+				// TODO count all links in all dirs
+				if (site.getCount() <= site.getCollected()) {
+					break loop;
+				}
+			}
+
+			page = goToNextPage(dir, lister);
+
+			lister = page.getFirstByXPath(dir.getListerXpath());
+		} while (lister != null);
+	}
+
+	private static HtmlPage goToNextPage(ArticlesDirectory dir, HtmlElement lister) throws IOException, InterruptedException {
+		HtmlPage page;
+		lister.setAttribute("href", mutateUrl(dir.getMutators(), lister.getAttribute("href")));
+		page = lister.click();
+		page = checkForCaptcha(page);
+		return page;
+	}
+
+	private static void collectArticleIfNeeded(Site site, Keyword keyword, Article article) {
+		if (!keyword.getArticles().contains(article)) {
+			keyword.addArticle(article);
+			site.setCollected(site.getCollected() + 1);
+		}
+	}
+
+	private static Article createArticle(ArticlesDirectory dir, URL u) {
+		Article article = new Article();
+		article.setUrl(u.toString());
+		article.setArticlesDirectory(dir);
+		return article;
+	}
+
+	private static URL makeFullUrlToArticle(ArticlesDirectory dir, HtmlAnchor a) throws MalformedURLException {
+		URL url = new URL(dir.getDirectoryUrl());
+		URL u = new URL(url.getProtocol(), url.getHost(), -1, a.getHrefAttribute());
+		return u;
+	}
+
+	private static HtmlElement extractLister(ArticlesDirectory dir, HtmlPage page) throws GrabitException {
+		HtmlElement lister = page.getFirstByXPath(dir.getListerXpath());
+
+		if (lister == null) {
+			throw new GrabitException("Lister is not found even for the first time", page.asXml());
+		}
+		return lister;
+	}
+
+	private static HtmlPage fillSearchBoxIfNeeded(ArticlesDirectory dir, Keyword keyword, HtmlPage page) throws IOException {
+		if (dir.getSearchXpath() != null) {
+			HtmlInput keywordField = page.getFirstByXPath(dir.getKeywordFieldXpath());
+			keywordField.type(keyword.getKeyword());
+
+			HtmlInput searchBtn = page.getFirstByXPath(dir.getSearchXpath());
+			page = searchBtn.click();
+		}
+		return page;
+	}
+
+	private static HtmlPage openStartPage(GrabitClient browser, ArticlesDirectory dir, Keyword keyword) throws IOException, MalformedURLException {
+		HtmlPage page = browser.getPage(mutateUrl(dir.getMutators(), dir.getDirectoryUrl(), keyword.getKeyword().replace(' ', '+')));
+		return page;
 	}
 
 	public static HtmlPage checkForCaptcha(HtmlPage page) throws IOException, InterruptedException {
@@ -213,7 +321,7 @@ public class GrabIt {
 			site.setUrl("http://kotoblog.com");
 			site.setStripLinks(true);
 			site.getKeywords().add(new Keyword("credit card rates"));
-			site.setCount(30);
+			site.setCount(5);
 			site.getArticlesDirectories().add(articlesDirectory);
 
 			config.getSites().add(site);
