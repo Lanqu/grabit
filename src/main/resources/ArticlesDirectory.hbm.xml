@@ -1,0 +1,50 @@
+<?xml version="1.0"?>
+<!DOCTYPE hibernate-mapping PUBLIC "-//Hibernate/Hibernate Mapping DTD 3.0//EN"
+"http://hibernate.sourceforge.net/hibernate-mapping-3.0.dtd">
+<!-- Generated 21.04.2013 21:20:42 by Hibernate Tools 3.4.0.CR1 -->
+<hibernate-mapping>
+    <class name="com.kotoblog.grabit.beans.ArticlesDirectory" table="ARTICLESDIRECTORY">
+        <id name="id" type="java.lang.Long">
+            <column name="ID" />
+            <generator class="assigned" />
+        </id>
+        <property name="directoryUrl" type="java.lang.String">
+            <column name="DIRECTORYURL" />
+        </property>
+        <property name="contentXpath" type="java.lang.String">
+            <column name="CONTENTXPATH" />
+        </property>
+        <property name="searchXpath" type="java.lang.String">
+            <column name="SEARCHXPATH" />
+        </property>
+        <property name="listerXpath" type="java.lang.String">
+            <column name="LISTERXPATH" />
+        </property>
+        <map name="mutators" table="ARTICLESDIRECTORY" lazy="true">
+            <key>
+                <column name="SERIALVERSIONUID" />
+            </key>
+            <map-key type="java.lang.String"></map-key>
+            <element type="java.lang.String">
+                <column name="MUTATORS" />
+            </element>
+        </map>
+        <property name="linksXpath" type="java.lang.String">
+            <column name="LINKSXPATH" />
+        </property>
+        <property name="keywordFieldXpath" type="java.lang.String">
+            <column name="KEYWORDFIELDXPATH" />
+        </property>
+        <property name="titleXpath" type="java.lang.String">
+            <column name="TITLEXPATH" />
+        </property>
+        <set name="excluders" table="ARTICLESDIRECTORY" inverse="false" lazy="true">
+            <key>
+                <column name="SERIALVERSIONUID" />
+            </key>
+            <element type="java.lang.String">
+                <column name="EXCLUDERS" />
+            </element>
+        </set>
+    </class>
+</hibernate-mapping>

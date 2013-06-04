@@ -5,14 +5,12 @@ import java.util.HashSet;
 import java.util.Set;
 
 import javax.persistence.CascadeType;
-import javax.persistence.Entity;
 import javax.persistence.FetchType;
 import javax.persistence.Id;
 import javax.persistence.ManyToMany;
 
 import org.springframework.stereotype.Component;
 
-@Entity
 @Component
 public class Keyword implements Serializable {
 

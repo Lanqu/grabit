@@ -1,0 +1,36 @@
+<?xml version="1.0"?>
+<!DOCTYPE hibernate-mapping PUBLIC "-//Hibernate/Hibernate Mapping DTD 3.0//EN"
+"http://hibernate.sourceforge.net/hibernate-mapping-3.0.dtd">
+<!-- Generated 21.04.2013 21:20:42 by Hibernate Tools 3.4.0.CR1 -->
+<hibernate-mapping>
+    <class name="com.kotoblog.grabit.beans.Site" table="SITE">
+        <id name="id" type="java.lang.Long">
+            <column name="ID" />
+            <generator class="assigned" />
+        </id>
+        <property name="url" type="java.lang.String">
+            <column name="URL" />
+        </property>
+        <property name="stripLinks" type="boolean">
+            <column name="STRIPLINKS" />
+        </property>
+        <set name="keywords" table="KEYWORD" inverse="false" lazy="true">
+            <key>
+                <column name="SERIALVERSIONUID" />
+            </key>
+            <one-to-many class="com.kotoblog.grabit.beans.Keyword" />
+        </set>
+        <set name="articlesDirectories" table="ARTICLESDIRECTORY" inverse="false" lazy="true">
+            <key>
+                <column name="SERIALVERSIONUID" />
+            </key>
+            <one-to-many class="com.kotoblog.grabit.beans.ArticlesDirectory" />
+        </set>
+        <property name="count" type="int">
+            <column name="COUNT" />
+        </property>
+        <property name="collected" type="int">
+            <column name="COLLECTED" />
+        </property>
+    </class>
+</hibernate-mapping>
